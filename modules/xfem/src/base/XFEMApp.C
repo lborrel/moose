@@ -23,9 +23,11 @@
 #include "XFEMSingleVariableConstraint.h"
 #include "XFEMPressure.h"
 #include "CrackTipEnrichmentStressDivergenceTensors.h"
+#include "XFEMDiffusion.h"
 #include "CrackTipEnrichmentCutOffBC.h"
 #include "ComputeCrackTipEnrichmentSmallStrain.h"
 #include "LevelSetMultiStressMaterial.h"
+
 
 #include "GeometricCutUserObject.h"
 #include "LineSegmentCutUserObject.h"
@@ -111,6 +113,7 @@ XFEMApp::registerObjects(Factory & factory)
 
   // Kernels
   registerKernel(CrackTipEnrichmentStressDivergenceTensors);
+  registerKernel(XFEMDiffusion);
 
   // Materials
   registerMaterial(ComputeCrackTipEnrichmentSmallStrain);
