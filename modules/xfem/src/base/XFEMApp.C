@@ -27,6 +27,7 @@
 #include "CrackTipEnrichmentCutOffBC.h"
 #include "ComputeCrackTipEnrichmentSmallStrain.h"
 #include "LevelSetMultiStressMaterial.h"
+#include "LevelSetMultiDiffusionMaterial.h"
 
 
 #include "GeometricCutUserObject.h"
@@ -118,6 +119,7 @@ XFEMApp::registerObjects(Factory & factory)
   // Materials
   registerMaterial(ComputeCrackTipEnrichmentSmallStrain);
   registerMaterial(LevelSetMultiStressMaterial);
+  registerMaterial(LevelSetMultiDiffusionMaterial);
 
   // BC's
   registerBoundaryCondition(CrackTipEnrichmentCutOffBC);
