@@ -75,7 +75,7 @@
 
 [Kernels]
   [./diff]
-    type = XFEMDiffusion
+    type = ConcentrationDiffusion
     variable = u
   [../]
   [./time_deriv]
@@ -140,12 +140,13 @@
   [../]
 
   [./diff_combined]
-    type = LevelSetTriMaterialDiffusion
+    type = LevelSetTriMaterialProperty
     levelset_positive_positive_base = 'A'
     levelset_negative_positive_base = 'B'
     levelset_negative_negative_base = 'C'
     level_set_1_var = ls_1
     level_set_2_var = ls_2
+    prop_name = diffusion_coefficient
   [../]
 []
 

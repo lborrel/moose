@@ -4,29 +4,29 @@
 /*          All contents are licensed under LGPL V2.1           */
 /*             See LICENSE for full restrictions                */
 /****************************************************************/
-#ifndef LEVELSETTRIMATERIALDIFFUSION_H
-#define LEVELSETTRIMATERIALDIFFUSION_H
+#ifndef LEVELSETTRIMATERIALPROPERTY_H
+#define LEVELSETTRIMATERIALPROPERTY_H
 
 #include "LevelSetTriMaterialBase.h"
 
 // Forward Declarations
-class LevelSetTriMaterialDiffusion;
+class LevelSetTriMaterialProperty;
 class XFEM;
 
-registerMooseObject("XFEMApp", LevelSetTriMaterialDiffusion);
+registerMooseObject("XFEMApp", LevelSetTriMaterialProperty);
 
 template <>
-InputParameters validParams<LevelSetTriMaterialDiffusion>();
+InputParameters validParams<LevelSetTriMaterialProperty>();
 
 /**
  * Compute the diffusion for tri-materials problem (consisting of three different materials) defined by two 
  * level set functions
  *
  */
-class LevelSetTriMaterialDiffusion : public LevelSetTriMaterialBase
+class LevelSetTriMaterialProperty : public LevelSetTriMaterialBase
 {
 public:
-  LevelSetTriMaterialDiffusion(const InputParameters & parameters);
+  LevelSetTriMaterialProperty(const InputParameters & parameters);
 
 protected:
   virtual void assignQpPropertiesForLevelSetPositivePositive();
@@ -34,10 +34,13 @@ protected:
   virtual void assignQpPropertiesForLevelSetNegativeNegative();
 
   /// diffusion coefficient for the two separate materials in the tri-material system
-  std::vector<const MaterialProperty<Real> *> _trimaterial_diffusion_coefficient;
+  std::vector<const MaterialProperty<Real> *> _trimaterial_material_prop;
+
+  /// Property name
+  std::string _prop_name;
 
   /// global diffusion coefficient (switch tri-material diffusion coefficient based on the values of the two level set functions)
-  MaterialProperty<Real> & _diffusion_coefficient;
+  MaterialProperty<Real> & _material_prop;
 };
 
-#endif // LEVELSETTRIMATERIALDIFFUSION_H
+#endif // LEVELSETTRIMATERIALPROPERTY_H
