@@ -65,6 +65,7 @@ class Tester(MooseObject):
         params.addParam('unique_id',     ['ALL'], "A test that runs only if libmesh is configured with --enable-unique-id ('ALL', 'TRUE', 'FALSE')")
         params.addParam('cxx11',         ['ALL'], "A test that runs only if CXX11 is available ('ALL', 'TRUE', 'FALSE')")
         params.addParam('asio',          ['ALL'], "A test that runs only if ASIO is available ('ALL', 'TRUE', 'FALSE')")
+        params.addParam("fparser_jit",   ['ALL'], "A test that runs only if FParser JIT is available ('ALL', 'TRUE', 'FALSE')")
         params.addParam('depend_files',  [], "A test that only runs if all depend files exist (files listed are expected to be relative to the base directory, not the test directory")
         params.addParam('env_vars',      [], "A test that only runs if all the environment variables listed exist")
         params.addParam('should_execute', True, 'Whether or not the executable needs to be run.  Use this to chain together multiple tests based off of one executeable invocation')
@@ -318,7 +319,11 @@ class Tester(MooseObject):
         if self.process is not None:
             try:
                 if platform.system() == "Windows":
-                    self.process.terminate()
+                    from distutils import spawn
+                    if spawn.find_executable("taskkill"):
+                        subprocess.call(['taskkill', '/F', '/T', '/PID', str(self.process.pid)])
+                    else:
+                        self.process.terminate()
                 else:
                     pgid = os.getpgid(self.process.pid)
                     os.killpg(pgid, SIGTERM)
@@ -464,6 +469,8 @@ class Tester(MooseObject):
                 tmp_reason = 'Valgrind==HEAVY'
             elif int(self.specs['min_parallel']) > 1 or int(self.specs['min_threads']) > 1:
                 tmp_reason = 'Valgrind requires serial'
+            elif self.specs["check_input"]:
+                tmp_reason = 'check_input==True'
             if tmp_reason != '':
                 reasons['valgrind'] = tmp_reason
         # If we're running in recover mode skip tests that have recover = false
@@ -485,7 +492,7 @@ class Tester(MooseObject):
 
         # PETSc and SLEPc is being explicitly checked above
         local_checks = ['platform', 'compiler', 'mesh_mode', 'method', 'library_mode', 'dtk', 'unique_ids', 'vtk', 'tecplot', \
-                        'petsc_debug', 'curl', 'tbb', 'superlu', 'cxx11', 'asio', 'unique_id', 'slepc', 'petsc_version_release', 'boost']
+                        'petsc_debug', 'curl', 'tbb', 'superlu', 'cxx11', 'asio', 'unique_id', 'slepc', 'petsc_version_release', 'boost', 'fparser_jit']
         for check in local_checks:
             test_platforms = set()
             operator_display = '!='

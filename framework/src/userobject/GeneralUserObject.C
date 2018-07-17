@@ -23,7 +23,7 @@ validParams<GeneralUserObject>()
 
 GeneralUserObject::GeneralUserObject(const InputParameters & parameters)
   : UserObject(parameters),
-    MaterialPropertyInterface(this),
+    MaterialPropertyInterface(this, Moose::EMPTY_BLOCK_IDS, Moose::EMPTY_BOUNDARY_IDS),
     TransientInterface(this),
     DependencyResolverInterface(),
     UserObjectInterface(this),
@@ -73,6 +73,26 @@ GeneralUserObject::getVectorPostprocessorValueByName(const VectorPostprocessorNa
 {
   _depend_vars.insert(name);
   return VectorPostprocessorInterface::getVectorPostprocessorValueByName(name, vector_name);
+}
+
+const VectorPostprocessorValue &
+GeneralUserObject::getVectorPostprocessorValue(const std::string & name,
+                                               const std::string & vector_name,
+                                               bool use_broadcast)
+{
+  _depend_vars.insert(_pars.get<VectorPostprocessorName>(name));
+  return VectorPostprocessorInterface::getVectorPostprocessorValue(
+      name, vector_name, use_broadcast);
+}
+
+const VectorPostprocessorValue &
+GeneralUserObject::getVectorPostprocessorValueByName(const VectorPostprocessorName & name,
+                                                     const std::string & vector_name,
+                                                     bool use_broadcast)
+{
+  _depend_vars.insert(name);
+  return VectorPostprocessorInterface::getVectorPostprocessorValueByName(
+      name, vector_name, use_broadcast);
 }
 
 void

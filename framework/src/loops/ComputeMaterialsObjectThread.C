@@ -71,7 +71,7 @@ ComputeMaterialsObjectThread::~ComputeMaterialsObjectThread() {}
 void
 ComputeMaterialsObjectThread::subdomainChanged()
 {
-  _need_internal_side_material = _fe_problem.needMaterialOnSide(_subdomain, _tid);
+  _need_internal_side_material = _fe_problem.needSubdomainMaterialOnSide(_subdomain, _tid);
   _fe_problem.subdomainSetup(_subdomain, _tid);
 
   std::set<MooseVariableFEBase *> needed_moose_vars;
@@ -111,7 +111,7 @@ ComputeMaterialsObjectThread::onElement(const Elem * elem)
 void
 ComputeMaterialsObjectThread::onBoundary(const Elem * elem, unsigned int side, BoundaryID bnd_id)
 {
-  if (_fe_problem.needMaterialOnSide(bnd_id, _tid))
+  if (_fe_problem.needBoundaryMaterialOnSide(bnd_id, _tid))
   {
     _assembly[_tid]->reinit(elem, side);
     unsigned int face_n_points = _assembly[_tid]->qRuleFace()->n_points();
@@ -190,22 +190,6 @@ ComputeMaterialsObjectThread::onInternalSide(const Elem * elem, unsigned int sid
          (neighbor->level() < elem->level())))
     {
       _assembly[_tid]->reinitElemAndNeighbor(elem, side, neighbor, neighbor_side);
-
-      // Face Materials
-      if (_discrete_materials[Moose::FACE_MATERIAL_DATA].hasActiveBlockObjects(_subdomain, _tid))
-        _bnd_material_props.initStatefulProps(
-            *_bnd_material_data[_tid],
-            _discrete_materials[Moose::FACE_MATERIAL_DATA].getActiveBlockObjects(_subdomain, _tid),
-            face_n_points,
-            *elem,
-            side);
-      if (_materials[Moose::FACE_MATERIAL_DATA].hasActiveBlockObjects(_subdomain, _tid))
-        _bnd_material_props.initStatefulProps(
-            *_bnd_material_data[_tid],
-            _materials[Moose::FACE_MATERIAL_DATA].getActiveBlockObjects(_subdomain, _tid),
-            face_n_points,
-            *elem,
-            side);
 
       // Neighbor Materials
       if (_discrete_materials[Moose::NEIGHBOR_MATERIAL_DATA].hasActiveBlockObjects(

@@ -37,9 +37,15 @@ hit_deps      := $(patsubst %.cc, %.$(obj-suffix).d, $(hit_srcfiles))
 pyhit_srcfiles  := $(hit_DIR)/hit.cpp $(hit_DIR)/lex.cc $(hit_DIR)/parse.cc
 pyhit_LIB       := $(FRAMEWORK_DIR)/../python/hit.so
 
+# some systems have python2 but no python2-config command - fall back to python-config for them
+pyconfig := python2-config
+ifeq (, $(shell which python2-config))
+  pyconfig := python-config
+endif
+
 hit $(pyhit_LIB): $(pyhit_srcfiles)
 	@echo "Building and linking "$@"..."
-	@bash -c '(cd "$(hit_DIR)" && $(libmesh_CXX) -std=c++11 -w -fPIC -lstdc++ -shared -L`python-config --prefix`/lib `python-config --includes` `python-config --ldflags` $^ -o $(pyhit_LIB))'
+	@bash -c '(cd "$(hit_DIR)" && $(libmesh_CXX) -std=c++11 -w -fPIC -lstdc++ -shared -L`$(pyconfig) --prefix`/lib `$(pyconfig) --includes` `$(pyconfig) --ldflags` $^ -o $(pyhit_LIB))'
 
 #
 # gtest
@@ -208,7 +214,7 @@ $(moose_revision_header): $(moose_HEADER_deps)
 # libmesh submodule status
 libmesh_status := $(shell git -C $(MOOSE_DIR) submodule status 2>/dev/null | grep libmesh | cut -c1)
 ifneq (,$(findstring +,$(libmesh_status)))
-  ifneq ($(origin MOOSE_DIR),environment)
+  ifneq ($(origin LIBMESH_DIR),environment)
     libmesh_message = "\n***WARNING***\nYour libmesh is out of date.\nYou need to run update_and_rebuild_libmesh.sh in the scripts directory.\n\n"
   endif
 endif

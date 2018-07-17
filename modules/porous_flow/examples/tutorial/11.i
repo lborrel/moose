@@ -363,6 +363,7 @@
       fp = true_water
       temperature_min = 275
       pressure_max = 1E8
+      interpolated_properties = 'density viscosity enthalpy internal_energy'
       fluid_property_file = water97_tabulated_11.csv
     [../]
     [./true_co2]
@@ -373,6 +374,7 @@
       fp = true_co2
       temperature_min = 275
       pressure_max = 1E8
+      interpolated_properties = 'density viscosity enthalpy internal_energy'
       fluid_property_file = co2_tabulated_11.csv
     [../]
   [../]
@@ -428,30 +430,6 @@
     fp = tabulated_co2
     phase = 1
   [../]
-  [./density_all_nodal]
-    type = PorousFlowJoiner
-    at_nodes = true
-    material_property = PorousFlow_fluid_phase_density_nodal
-  [../]
-  [./density_all_qp]
-    type = PorousFlowJoiner
-    material_property = PorousFlow_fluid_phase_density_qp
-  [../]
-  [./viscosity_all_nodal]
-    type = PorousFlowJoiner
-    at_nodes = true
-    material_property = PorousFlow_viscosity_nodal
-  [../]
-  [./energy_all_nodal]
-    type = PorousFlowJoiner
-    at_nodes = true
-    material_property = PorousFlow_fluid_phase_internal_energy_nodal
-  [../]
-  [./enthalpy_all_nodal]
-    type = PorousFlowJoiner
-    at_nodes = true
-    material_property = PorousFlow_fluid_phase_enthalpy_nodal
-  [../]
   [./relperm_water_nodal]
     type = PorousFlowRelativePermeabilityCorey
     at_nodes = true
@@ -468,11 +446,6 @@
     s_res = 0.1
     sum_s_res = 0.2
     phase = 1
-  [../]
-  [./relperm_all_nodal]
-    type = PorousFlowJoiner
-    at_nodes = true
-    material_property = PorousFlow_relative_permeability_nodal
   [../]
   [./porosity_nodal]
     type = PorousFlowPorosity

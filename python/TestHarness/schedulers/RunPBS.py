@@ -7,7 +7,7 @@
 #* Licensed under LGPL 2.1, please see LICENSE for details
 #* https://www.gnu.org/licenses/lgpl-2.1.html
 
-import os
+import os, re
 from QueueManager import QueueManager
 from TestHarness import util # to execute qsub
 
@@ -28,6 +28,47 @@ class RunPBS(QueueManager):
     def getBadKeyArgs(self):
         """ arguments we need to remove from sys.argv """
         return ['--pbs']
+
+    def hasTimedOutOrFailed(self, job_data):
+        """ use qstat and return bool on job failures outside of the TestHarness's control """
+        launch_id = job_data.json_data.get(job_data.job_dir,
+                                           {}).get(job_data.plugin,
+                                                   {}).get('ID', "").split('.')[0]
+
+        # We shouldn't run into a null, but just in case, lets handle it
+        if launch_id:
+            qstat_command_result = util.runCommand('qstat -xf %s' % (launch_id))
+
+            # handle a qstat execution failure for some reason
+            if qstat_command_result.find('ERROR') != -1:
+                # set error for each job contained in group
+                for job in job_data.jobs.getJobs():
+                    job.setOutput('ERROR invoking `qstat`\n%s' % (qstat_command_result))
+                    job.setStatus(job.error, 'QSTAT')
+                return True
+
+            qstat_job_result = re.findall(r'Exit_status = (\d+)', qstat_command_result)
+
+            # woops. This job was killed by PBS by exceeding walltime
+            if qstat_job_result and qstat_job_result[0] == "271":
+                for job in job_data.jobs.getJobs():
+                    job.addCaveats('Killed by PBS Exceeded Walltime')
+                return True
+
+            # Capture TestHarness exceptions
+            elif qstat_job_result and qstat_job_result[0] != "0":
+
+                # Try and gather some useful output we can tack on to one of the job objects
+                output_file = job_data.json_data.get(job_data.job_dir, {}).get(job_data.plugin, {}).get('QSUB_OUTPUT', "")
+                if os.path.exists(output_file):
+                    with open(output_file, 'r') as f:
+                        output_string = util.readOutput(f, None, self.options)
+                    job_data.jobs.getJobs()[0].setOutput(output_string)
+
+                # Add a caveat to each job, explaining that one of the jobs caused a TestHarness exception
+                for job in job_data.jobs.getJobs():
+                    job.addCaveats('TESTHARNESS EXCEPTION')
+                return True
 
     def _augmentTemplate(self, job):
         """ populate qsub script template with paramaters """
@@ -98,5 +139,5 @@ class RunPBS(QueueManager):
                                     'QSUB_COMMAND' : command,
                                     'NCPUS' : template['mpi_procs'],
                                     'WALLTIME' : template['walltime'],
-                                    'QSUB_OUTOUT' : template['output']})
+                                    'QSUB_OUTPUT' : template['output']})
             tester.setStatus(tester.no_status, 'LAUNCHING')

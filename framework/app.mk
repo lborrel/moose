@@ -19,7 +19,6 @@ $APPLICATION_NAME$(STACK) := $(APPLICATION_NAME)
 $DEPEND_MODULES$(STACK) := $(DEPEND_MODULES)
 $GEN_REVISION$(STACK) := $(GEN_REVISION)
 $BUILD_EXEC$(STACK) := $(BUILD_EXEC)
-$DEP_APPS$(STACK) := $(DEP_APPS)
 
 -include $(APPLICATION_DIR)/$(APPLICATION_NAME).mk
 
@@ -31,7 +30,6 @@ APPLICATION_NAME := $($APPLICATION_NAME$(STACK))
 DEPEND_MODULES := $($DEPEND_MODULES$(STACK))
 GEN_REVISION := $($GEN_REVISION$(STACK))
 BUILD_EXEC := $($BUILD_EXEC$(STACK))
-DEP_APPS := $($DEP_APPS$(STACK))
 STACK := $(basename $(STACK))
 
 ifneq ($(SUFFIX),)
@@ -283,7 +281,7 @@ $(app_LIB): curr_objs := $(app_objects)
 $(app_LIB): curr_dir  := $(APPLICATION_DIR)
 $(app_LIB): curr_deps := $(depend_libs)
 $(app_LIB): curr_libs := $(depend_libs_flags)
-$(app_LIB): $(app_HEADER) $(app_plugin_deps) $(depend_libs) $(app_objects)
+$(app_LIB): $(app_HEADER) $(app_plugin_deps) $(depend_libs) $(app_objects) $(ADDITIONAL_DEPEND_LIBS)
 	@echo "Linking Library "$@"..."
 	@$(libmesh_LIBTOOL) --tag=CXX $(LIBTOOLFLAGS) --mode=link --quiet \
 	  $(libmesh_CXX) $(libmesh_CXXFLAGS) -o $@ $(curr_objs) $(libmesh_LDFLAGS) $(EXTERNAL_FLAGS) -rpath $(curr_dir)/lib $(curr_libs)
@@ -299,7 +297,7 @@ $(app_test_LIB): curr_objs := $(app_test_objects)
 $(app_test_LIB): curr_dir  := $(APPLICATION_DIR)/test
 $(app_test_LIB): curr_deps := $(depend_libs)
 $(app_test_LIB): curr_libs := $(depend_libs_flags)
-$(app_test_LIB): $(app_HEADER) $(app_plugin_deps) $(depend_libs) $(app_test_objects)
+$(app_test_LIB): $(app_HEADER) $(app_plugin_deps) $(depend_libs) $(app_test_objects) $(ADDITIONAL_DEPEND_LIBS)
 	@echo "Linking Library "$@"..."
 	@$(libmesh_LIBTOOL) --tag=CXX $(LIBTOOLFLAGS) --mode=link --quiet \
 	  $(libmesh_CXX) $(libmesh_CXXFLAGS) -o $@ $(curr_objs) $(libmesh_LDFLAGS) $(EXTERNAL_FLAGS) -rpath $(curr_dir)/lib $(curr_libs)
@@ -315,8 +313,10 @@ endif
 # registered as expected.  See https://stackoverflow.com/questions/5202142/static-variable-initialization-over-a-library
 # and https://stackoverflow.com/questions/9459980/c-global-variable-not-initialized-when-linked-through-static-libraries-but-ok#11336506
 # for more explanations/details.
+uniq = $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
 compilertype := unknown
-applibs :=  $(app_test_LIB) $(app_LIBS)
+applibs :=  $(app_test_LIB) $(app_LIBS) $(depend_test_libs)
+applibs := $(call uniq,$(applibs))
 ifeq ($(libmesh_static),yes)
   ifneq (,$(findstring clang,$(CXX)))
     compilertype := clang
@@ -345,7 +345,7 @@ endif
 $(app_EXEC): $(app_LIBS) $(mesh_library) $(main_object) $(app_test_LIB) $(depend_test_libs) $(ADDITIONAL_DEPEND_LIBS)
 	@echo "Linking Executable "$@"..."
 	@$(libmesh_LIBTOOL) --tag=CXX $(LIBTOOLFLAGS) --mode=link --quiet \
-	  $(libmesh_CXX) $(libmesh_CXXFLAGS) -o $@ $(main_object) $(applibs) $(depend_test_libs) $(libmesh_LIBS) $(libmesh_LDFLAGS) $(depend_test_libs_flags) $(EXTERNAL_FLAGS) $(ADDITIONAL_LIBS)
+	  $(libmesh_CXX) $(libmesh_CXXFLAGS) -o $@ $(main_object) $(applibs) $(libmesh_LIBS) $(libmesh_LDFLAGS) $(depend_test_libs_flags) $(EXTERNAL_FLAGS) $(ADDITIONAL_LIBS)
 
 # Clang static analyzer
 sa:: $(app_analyzer)

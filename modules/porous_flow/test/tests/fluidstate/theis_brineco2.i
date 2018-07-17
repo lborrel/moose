@@ -137,6 +137,7 @@
     [./co2]
       type = TabulatedFluidProperties
       fp = co2sw
+      fluid_property_file = fluid_properties.csv
     [../]
     [./brine]
       type = BrineFluidProperties
@@ -193,11 +194,6 @@
     at_nodes = true
     n = 2
     phase = 1
-  [../]
-  [./relperm_all]
-    type = PorousFlowJoiner
-    at_nodes = true
-    material_property = PorousFlow_relative_permeability_nodal
   [../]
 []
 

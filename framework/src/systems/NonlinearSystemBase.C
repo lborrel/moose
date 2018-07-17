@@ -62,6 +62,7 @@
 #include "ElementPairLocator.h"
 #include "ODETimeKernel.h"
 #include "AllLocalDofIndicesThread.h"
+#include "FloatingPointExceptionGuard.h"
 
 // libMesh
 #include "libmesh/nonlinear_solver.h"
@@ -245,20 +246,15 @@ NonlinearSystemBase::setDecomposition(const std::vector<std::string> & splits)
 {
   /// Although a single top-level split is allowed in Problem, treat it as a list of splits for conformity with the Split input syntax.
   if (splits.size() && splits.size() != 1)
-  {
-    std::ostringstream err;
-    err << "Only a single top-level split is allowed in a Problem's decomposition.";
-    mooseError(err.str());
-  }
+    mooseError("Only a single top-level split is allowed in a Problem's decomposition.");
+
   if (splits.size())
   {
     _decomposition_split = splits[0];
     _have_decomposition = true;
   }
   else
-  {
     _have_decomposition = false;
-  }
 }
 
 void
@@ -462,8 +458,6 @@ NonlinearSystemBase::addInterfaceKernel(std::string interface_kernel_name,
     _interface_kernels.addObject(interface_kernel, tid);
     _vars[tid].addBoundaryVars(boundary_ids, interface_kernel->getCoupledVars());
   }
-
-  _doing_dg = true;
 }
 
 void
@@ -547,14 +541,14 @@ NonlinearSystemBase::computeResidualTags(const std::set<TagID> & tags)
 {
   Moose::perf_log.push("compute_residual()", "Execution");
 
-  bool reuired_residual = tags.find(residualVectorTag()) == tags.end() ? false : true;
+  bool required_residual = tags.find(residualVectorTag()) == tags.end() ? false : true;
 
   _n_residual_evaluations++;
 
   // not suppose to do anythin on matrix
   deactiveAllMatrixTags();
 
-  Moose::enableFPE();
+  FloatingPointExceptionGuard fpe_guard(_app);
 
   for (const auto & numeric_vec : _vecs_to_zero_for_residual)
     if (hasVector(numeric_vec))
@@ -570,7 +564,7 @@ NonlinearSystemBase::computeResidualTags(const std::set<TagID> & tags)
     computeResidualInternal(tags);
     closeTaggedVectors(tags);
 
-    if (reuired_residual)
+    if (required_residual)
     {
       auto & residual = getVector(residualVectorTag());
       if (_time_integrator)
@@ -584,7 +578,7 @@ NonlinearSystemBase::computeResidualTags(const std::set<TagID> & tags)
     closeTaggedVectors(tags);
 
     // If we are debugging residuals we need one more assignment to have the ghosted copy up to date
-    if (_need_residual_ghosted && _debugging_residuals && reuired_residual)
+    if (_need_residual_ghosted && _debugging_residuals && required_residual)
     {
       auto & residual = getVector(residualVectorTag());
 
@@ -605,9 +599,8 @@ NonlinearSystemBase::computeResidualTags(const std::set<TagID> & tags)
     // "diverged" reason during the next solve.
   }
 
-  // not suppose to do anythin on matrix
+  // not supposed to do anything on matrix
   activeAllMatrixTags();
-  Moose::enableFPE(false);
   Moose::perf_log.pop("compute_residual()", "Execution");
 }
 
@@ -1894,7 +1887,7 @@ NonlinearSystemBase::computeScalarKernelsJacobians()
 void
 NonlinearSystemBase::computeJacobianInternal(const std::set<TagID> & tags)
 {
-  // Make matrice ready to use
+  // Make matrix ready to use
   activeAllMatrixTags();
 
   for (auto tag : tags)
@@ -2216,7 +2209,7 @@ NonlinearSystemBase::computeJacobianTags(const std::set<TagID> & tags)
 {
   Moose::perf_log.push("compute_jacobian()", "Execution");
 
-  Moose::enableFPE();
+  FloatingPointExceptionGuard fpe_guard(_app);
 
   try
   {
@@ -2228,8 +2221,6 @@ NonlinearSystemBase::computeJacobianTags(const std::set<TagID> & tags)
     // calling stopSolve(), it is now up to PETSc to return a
     // "diverged" reason during the next solve.
   }
-
-  Moose::enableFPE(false);
 
   Moose::perf_log.pop("compute_jacobian()", "Execution");
 }
@@ -2252,7 +2243,7 @@ NonlinearSystemBase::computeJacobianBlocks(std::vector<JacobianBlock *> & blocks
 {
   Moose::perf_log.push("compute_jacobian_block()", "Execution");
 
-  Moose::enableFPE();
+  FloatingPointExceptionGuard fpe_guard(_app);
 
   for (unsigned int i = 0; i < blocks.size(); i++)
   {
@@ -2349,8 +2340,6 @@ NonlinearSystemBase::computeJacobianBlocks(std::vector<JacobianBlock *> & blocks
 
     jacobian.close();
   }
-
-  Moose::enableFPE(false);
 
   Moose::perf_log.pop("compute_jacobian_block()", "Execution");
 }
@@ -2719,12 +2708,13 @@ NonlinearSystemBase::setMooseKSPNormType(MooseEnum kspnorm)
 }
 
 bool
-NonlinearSystemBase::needMaterialOnSide(BoundaryID bnd_id, THREAD_ID tid) const
+NonlinearSystemBase::needBoundaryMaterialOnSide(BoundaryID bnd_id, THREAD_ID tid) const
 {
   return _integrated_bcs.hasActiveBoundaryObjects(bnd_id, tid);
 }
 
-bool NonlinearSystemBase::needMaterialOnSide(SubdomainID /*subdomain_id*/, THREAD_ID /*tid*/) const
+bool NonlinearSystemBase::needSubdomainMaterialOnSide(SubdomainID /*subdomain_id*/,
+                                                      THREAD_ID /*tid*/) const
 {
   return _doing_dg;
 }

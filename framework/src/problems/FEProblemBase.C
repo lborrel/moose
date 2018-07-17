@@ -82,6 +82,7 @@
 #include "InputParameterWarehouse.h"
 #include "TimeIntegrator.h"
 #include "LineSearch.h"
+#include "FloatingPointExceptionGuard.h"
 
 #include "libmesh/exodusII_io.h"
 #include "libmesh/quadrature.h"
@@ -712,6 +713,9 @@ FEProblemBase::initialSetup()
     backupMultiApps(EXEC_INITIAL);
     Moose::perf_log.pop("execMultiApps()", "Setup");
 
+    for (THREAD_ID tid = 0; tid < n_threads; tid++)
+      reinitScalars(tid);
+
     // TODO: user object evaluation could fail.
     computeUserObjects(EXEC_INITIAL, Moose::PRE_AUX);
 
@@ -1069,10 +1073,8 @@ FEProblemBase::addCachedResidual(THREAD_ID tid)
 void
 FEProblemBase::addCachedResidualDirectly(NumericVector<Number> & residual, THREAD_ID tid)
 {
-  if (_nl->hasVector(_nl->timeVectorTag()))
-    _assembly[tid]->addCachedResidual(residual, _nl->timeVectorTag());
-  if (_nl->hasVector(_nl->nonTimeVectorTag()))
-    _assembly[tid]->addCachedResidual(residual, _nl->nonTimeVectorTag());
+  _assembly[tid]->addCachedResidual(residual, _nl->timeVectorTag());
+  _assembly[tid]->addCachedResidual(residual, _nl->nonTimeVectorTag());
 
   if (_displaced_problem)
     _displaced_problem->addCachedResidualDirectly(residual, tid);
@@ -2119,7 +2121,7 @@ FEProblemBase::projectSolution()
 {
   Moose::perf_log.push("projectSolution()", "Utility");
 
-  Moose::enableFPE();
+  FloatingPointExceptionGuard fpe_guard(_app);
 
   ConstElemRange & elem_range = *_mesh.getActiveLocalElementRange();
   ComputeInitialConditionThread cic(*this);
@@ -2160,8 +2162,6 @@ FEProblemBase::projectSolution()
       }
     }
   }
-
-  Moose::enableFPE(false);
 
   _nl->solution().close();
   _nl->solution().localize(*_nl->system().current_local_solution, _nl->dofMap().get_send_list());
@@ -2673,23 +2673,63 @@ VectorPostprocessorValue &
 FEProblemBase::getVectorPostprocessorValue(const VectorPostprocessorName & name,
                                            const std::string & vector_name)
 {
-  auto & val = _vpps_data.getVectorPostprocessorValue(name, vector_name);
-  return val;
+  mooseDeprecated("getVectorPostprocessorValue() is DEPRECATED: Use the new version where you need "
+                  "to specify whether or not the vector must be broadcast");
+
+  // The false means that we're not going to ask for this value to be broadcast
+  // This mimics the old behavior - but is unsafe
+  return _vpps_data.getVectorPostprocessorValue(name, vector_name, false);
 }
 
 VectorPostprocessorValue &
 FEProblemBase::getVectorPostprocessorValueOld(const std::string & name,
                                               const std::string & vector_name)
 {
-  return _vpps_data.getVectorPostprocessorValueOld(name, vector_name);
+  mooseDeprecated("getVectorPostprocessorValue() is DEPRECATED: Use the new version where you need "
+                  "to specify whether or not the vector must be broadcast");
+
+  // The false means that we're not going to ask for this value to be broadcast
+  // This mimics the old behavior - but is unsafe
+  return _vpps_data.getVectorPostprocessorValueOld(name, vector_name, false);
+}
+
+VectorPostprocessorValue &
+FEProblemBase::getVectorPostprocessorValue(const VectorPostprocessorName & name,
+                                           const std::string & vector_name,
+                                           bool needs_broadcast)
+{
+  return _vpps_data.getVectorPostprocessorValue(name, vector_name, needs_broadcast);
+}
+
+VectorPostprocessorValue &
+FEProblemBase::getVectorPostprocessorValueOld(const std::string & name,
+                                              const std::string & vector_name,
+                                              bool needs_broadcast)
+{
+  return _vpps_data.getVectorPostprocessorValueOld(name, vector_name, needs_broadcast);
+}
+
+ScatterVectorPostprocessorValue &
+FEProblemBase::getScatterVectorPostprocessorValue(const VectorPostprocessorName & name,
+                                                  const std::string & vector_name)
+{
+  return _vpps_data.getScatterVectorPostprocessorValue(name, vector_name);
+}
+
+ScatterVectorPostprocessorValue &
+FEProblemBase::getScatterVectorPostprocessorValueOld(const VectorPostprocessorName & name,
+                                                     const std::string & vector_name)
+{
+  return _vpps_data.getScatterVectorPostprocessorValueOld(name, vector_name);
 }
 
 VectorPostprocessorValue &
 FEProblemBase::declareVectorPostprocessorVector(const VectorPostprocessorName & name,
                                                 const std::string & vector_name,
-                                                bool contains_complete_history)
+                                                bool contains_complete_history,
+                                                bool is_broadcast)
 {
-  return _vpps_data.declareVector(name, vector_name, contains_complete_history);
+  return _vpps_data.declareVector(name, vector_name, contains_complete_history, is_broadcast);
 }
 
 const std::vector<std::pair<std::string, VectorPostprocessorData::VectorPostprocessorState>> &
@@ -2921,6 +2961,11 @@ FEProblemBase::computeUserObjects(const ExecFlagType & type, const Moose::AuxGro
       std::shared_ptr<Postprocessor> pp = std::dynamic_pointer_cast<Postprocessor>(obj);
       if (pp)
         _pps_data.storeValue(obj->name(), pp->getValue());
+
+      auto vpp = std::dynamic_pointer_cast<VectorPostprocessor>(obj);
+
+      if (vpp)
+        _vpps_data.broadcastScatterVectors(vpp->PPName());
     }
   }
 
@@ -3819,6 +3864,9 @@ FEProblemBase::checkExceptionAndStopSolve()
     // SNESSetFunctionDomainError() or directly inserting NaNs in the
     // residual vector to let PETSc >= 3.6 return DIVERGED_NANORINF.
     _nl->stopSolve();
+
+    // and close Aux system (we MUST do this here; see #11525)
+    _aux->solution().close();
 
     // We've handled this exception, so we no longer have one.
     _has_exception = false;
@@ -4908,13 +4956,11 @@ FEProblemBase::checkDisplacementOrders()
 {
   if (_displaced_problem)
   {
-    MeshBase::const_element_iterator it = _displaced_mesh->activeLocalElementsBegin(),
-                                     end = _displaced_mesh->activeLocalElementsEnd();
-
     bool mesh_has_second_order_elements = false;
-    for (; it != end; ++it)
+    for (const auto & elem : as_range(_displaced_mesh->activeLocalElementsBegin(),
+                                      _displaced_mesh->activeLocalElementsEnd()))
     {
-      if ((*it)->default_order() == SECOND)
+      if (elem->default_order() == SECOND)
       {
         mesh_has_second_order_elements = true;
         break;
@@ -5291,13 +5337,13 @@ FEProblemBase::registerRandomInterface(RandomInterface & random_interface, const
 }
 
 bool
-FEProblemBase::needMaterialOnSide(BoundaryID bnd_id, THREAD_ID tid)
+FEProblemBase::needBoundaryMaterialOnSide(BoundaryID bnd_id, THREAD_ID tid)
 {
   if (_bnd_mat_side_cache[tid].find(bnd_id) == _bnd_mat_side_cache[tid].end())
   {
     _bnd_mat_side_cache[tid][bnd_id] = false;
 
-    if (_nl->needMaterialOnSide(bnd_id, tid) || _aux->needMaterialOnSide(bnd_id))
+    if (_nl->needBoundaryMaterialOnSide(bnd_id, tid) || _aux->needMaterialOnSide(bnd_id))
       _bnd_mat_side_cache[tid][bnd_id] = true;
 
     else if (_side_user_objects.hasActiveBoundaryObjects(bnd_id, tid))
@@ -5308,13 +5354,13 @@ FEProblemBase::needMaterialOnSide(BoundaryID bnd_id, THREAD_ID tid)
 }
 
 bool
-FEProblemBase::needMaterialOnSide(SubdomainID subdomain_id, THREAD_ID tid)
+FEProblemBase::needSubdomainMaterialOnSide(SubdomainID subdomain_id, THREAD_ID tid)
 {
   if (_block_mat_side_cache[tid].find(subdomain_id) == _block_mat_side_cache[tid].end())
   {
     _block_mat_side_cache[tid][subdomain_id] = false;
 
-    if (_nl->needMaterialOnSide(subdomain_id, tid))
+    if (_nl->needSubdomainMaterialOnSide(subdomain_id, tid))
       _block_mat_side_cache[tid][subdomain_id] = true;
     else if (_internal_side_user_objects.hasActiveBlockObjects(subdomain_id, tid))
       _block_mat_side_cache[tid][subdomain_id] = true;
