@@ -108,15 +108,13 @@ MovingLineSegmentCutSetUserObject::calculateInterfaceVelocity(Real value_positiv
                                                               RealVectorValue grad_negative)
 {
   if (!MooseUtils::absoluteFuzzyEqual(value_positive, value_negative))
-    // return std::abs((_diffusivity_at_positive_level_set_side * grad_positive(0) -
-    //                  _diffusivity_at_negative_level_set_side * grad_negative(0)) /
-    //                 (value_positive - value_negative));
+    return std::abs((_diffusivity_at_positive_level_set_side * grad_positive(0) -
+                     _diffusivity_at_negative_level_set_side * grad_negative(0)) /
+                    (value_positive - value_negative));
     // return std::abs((_diffusivity_at_positive_level_set_side * grad_positive(0) -
     //                  _diffusivity_at_negative_level_set_side * grad_negative(0)) /
     //                 (value_positive - value_negative + 8));
-    return -4.111e-8;
-  else
-    return -4.111e-8;
+    //return -4.111e-8;
 }
 
 void

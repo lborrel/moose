@@ -50,6 +50,8 @@ protected:
 
   std::vector<Real> _cut_data;
 
+  Real _initial_cut;
+
   /// The variable number of the solution variable we using to calcuate velocity
   const unsigned int _var_number;
 

@@ -115,7 +115,7 @@ MovingLineSegmentCutSetUserObjectAlphaBeta::calculateInterfaceVelocity(Real valu
     //                 _diffusivity_at_negative_level_set_side * grad_negative(0)) /
     //                (value_positive - value_negative + 8));
   //else
-  return (sqrt(2 * 0.01126 * exp(-35980 / (1.987 * value_positive))) + 1e-4) * (-1e-2);
+  return (sqrt(2 * 0.01126 * exp(-35890 / (1.987 * value_positive))) + sqrt(2 * 0.7615 * exp(-48140 / (1.987 * value_positive)))) * (-1e-2);
 }
 
 void

@@ -27,6 +27,8 @@ validParams<MovingLineSegmentCutSetUserObjectOxideMetal>()
   params.addRequiredParam<UserObjectName>("interface_value_uo", "XXX");
   params.addRequiredParam<std::vector<Real>>("cut_data",
                                              "Vector of Real values providing cut information");
+  params.addRequiredParam<Real>("initial_cut",
+                                "Initial cut");
   params.addRequiredParam<VariableName>(
       "var", "The name of solution variable used to calcuate interface velocity.");
   params.addRequiredParam<Real>("diffusivity_at_positive_level_set_side",
@@ -42,6 +44,7 @@ MovingLineSegmentCutSetUserObjectOxideMetal::MovingLineSegmentCutSetUserObjectOx
   : GeometricCut2DUserObject(parameters),
     VectorPostprocessorInterface(this),
     _cut_data(getParam<std::vector<Real>>("cut_data")),
+    _initial_cut(getParam<Real>("initial_cut")),
     _var_number(_subproblem.getVariable(_tid, parameters.get<VariableName>("var")).number()),
     _system(_subproblem.getSystem(getParam<VariableName>("var"))),
     _solution(_system.current_local_solution.get()),
@@ -115,7 +118,50 @@ MovingLineSegmentCutSetUserObjectOxideMetal::calculateInterfaceVelocity(Real val
     //                 _diffusivity_at_negative_level_set_side * grad_negative(0)) /
     //                (value_positive - value_negative + 8));
   //else
-  return sqrt(2 * 0.01126 * exp(-35980 / (1.987 * value_positive))) * (-1e-2);
+  const Real zircaloy_density (6550);
+  const Real zro2_density (5680);
+  const Real oxygen_atmass (16);
+  const Real zirconium_atmass (91.2);
+  const Real zirconium_PBR (1.56);
+  const Real Na(6.022140857e23);
+  const Real Kb (8.6173303e-5);
+  const Real migr_jp_f (1e13);
+  const Real migr_jp_l (5e-10);
+  const Real migr_e_v (1.35);
+  const Real migr_e_e (1.30);
+  const Real con_v_ox_w (1e23);
+  const Real con_e_ox_w (1e23);
+  const Real con_v_ox_m (1.3194e27);
+  const Real con_e_ox_m = 2 * con_v_ox_m;
+  const Real con_o_ox_m (5.24e28);
+  const Real con_o_m_ox (1.7078e28);
+//  const Real D_alpha (1.6187e-11);
+
+  const Real mobil_v = 4 * pow(migr_jp_l, 2) * migr_jp_f * 2
+                       / ( Kb * value_positive )
+                       * exp( - migr_e_v / ( Kb * value_positive ) );
+  const Real mobil_e = 4 * pow(migr_jp_l, 2) * migr_jp_f * -1
+                       / ( Kb * value_positive )
+                       * exp( - migr_e_e / ( Kb * value_positive ) );
+  
+  const Real A = mobil_e * con_e_ox_w - 2 * mobil_v * con_v_ox_m;
+  const Real B = mobil_e * con_e_ox_w - mobil_e * con_e_ox_m;
+  const Real C = 2 * mobil_v * con_v_ox_w - mobil_e * con_e_ox_m;
+
+  const Real eta = ( -B - sqrt( pow( B, 2 ) - 4 * A * C ) ) / ( 2 * A );
+  const Real potential = Kb * value_positive * log( eta );
+
+  const Real J_v = mobil_v * potential * ( con_v_ox_w - con_v_ox_m * pow( eta, 2 ) ) / ( 1 - pow( eta, 2 ) ) / ( _initial_cut - _cut_data[0] );
+  const Real J_o = zircaloy_density * Na / (zirconium_atmass * 1e-3) * _diffusivity_at_positive_level_set_side * grad_negative(0);
+
+  std::cout << "grad_negative(0) = " << grad_negative(0) << std::endl;
+  std::cout << "J_v = " << J_v << std::endl;
+  std::cout << "J_o = " << J_o << std::endl;
+
+  if (_t == 0 || _t == 10)
+    return sqrt(2 * 0.01126 * exp(-35980 / (1.987 * value_positive))) * (-1e-2);
+  else
+    return - zirconium_PBR * ( J_v - J_o) / ( zirconium_PBR * con_o_ox_m - con_o_m_ox );
 }
 
 void
@@ -146,23 +192,23 @@ MovingLineSegmentCutSetUserObjectOxideMetal::execute()
       cut_data_copy[i * 6 + 0] +=
           calculateInterfaceVelocity(
               value_positive[i], value_negative[i], grad_positive[i], grad_negative[i]) *
-              sqrt(_dt);
+              _dt;
       cut_data_copy[i * 6 + 2] += calculateInterfaceVelocity(value_positive[i + 1],
                                                              value_negative[i + 1],
                                                              grad_positive[i + 1],
                                                              grad_negative[i + 1]) *
-              sqrt(_dt);
+              _dt;
          }
     else
     {
       cut_data_copy[i * 6 + 0] +=
           calculateInterfaceVelocity(
-              value_positive[i], value_negative[i], grad_positive[i], grad_negative[i]) / ( 2 * sqrt(_t) ) *
+              value_positive[i], value_negative[i], grad_positive[i], grad_negative[i]) *
               _dt;
       cut_data_copy[i * 6 + 2] += calculateInterfaceVelocity(value_positive[i + 1],
                                                              value_negative[i + 1],
                                                              grad_positive[i + 1],
-                                                             grad_negative[i + 1]) / ( 2 * sqrt(_t) ) *
+                                                             grad_negative[i + 1]) *
               _dt;
     }
   }
@@ -197,23 +243,23 @@ MovingLineSegmentCutSetUserObjectOxideMetal::finalize()
       _cut_data[i * 6 + 0] +=
           calculateInterfaceVelocity(
               value_positive[i], value_negative[i], grad_positive[i], grad_negative[i]) *
-              sqrt(_dt);
+              _dt;
       _cut_data[i * 6 + 2] += calculateInterfaceVelocity(value_positive[i + 1],
                                                          value_negative[i + 1],
                                                          grad_positive[i + 1],
                                                          grad_negative[i + 1]) *
-              sqrt(_dt);
+              _dt;
     }
     else
     {
       _cut_data[i * 6 + 0] +=
           calculateInterfaceVelocity(
-              value_positive[i], value_negative[i], grad_positive[i], grad_negative[i]) / ( 2 * sqrt(_t) ) *
+              value_positive[i], value_negative[i], grad_positive[i], grad_negative[i]) *
               _dt;
       _cut_data[i * 6 + 2] += calculateInterfaceVelocity(value_positive[i + 1],
                                                          value_negative[i + 1],
                                                          grad_positive[i + 1],
-                                                         grad_negative[i + 1]) / ( 2 * sqrt(_t) ) *
+                                                         grad_negative[i + 1]) *
               _dt;
     }
   }

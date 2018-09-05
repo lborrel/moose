@@ -24,11 +24,11 @@ InputParameters
 validParams<PointValueAtXFEMInterfaceAlphaBeta>()
 {
   InputParameters params = validParams<GeneralUserObject>();
-  params.addRequiredCoupledVar(
-      "variable", "The names of the variables that this VectorPostprocessor operates on");
+  params.addRequiredCoupledVar("variable",
+                               "The names of the variables that this UserObject operates on");
   params.addParam<UserObjectName>(
       "geometric_cut_userobject",
-      "Name of GeometricCutUserObject associated with this constraint.");
+      "Name of GeometricCutUserObject that provides the points to this UserObject.");
   params.addRequiredParam<VariableName>(
       "level_set_var", "The name of level set variable used to represent the interface");
   return params;
@@ -106,11 +106,29 @@ PointValueAtXFEMInterfaceAlphaBeta::execute()
 
   for (auto i = beginIndex(_points); i < _points.size(); ++i)
   {
-    Point & p = _points[i];
+    std::cout << "point[" << i << "]= " << _points[i] << std::endl;
+  }
+
+  for (auto i = beginIndex(_points); i < _points.size(); ++i)
+  {
+    // Point & p = _points[i];
+    Point p = _points[i];
+
+    if (i == 0)
+    {
+      p = _points[1];
+    }
+
+    if (i == _points.size() - 1)
+    {
+      p = _points[_points.size() - 2];
+    }
+
+    // TODO : fix bug: crack tip element cannot find pair element!
 
     if (bbox.contains_point(p))
     {
-      const Elem * elem = getLocalElemContainingPoint(p, true);
+      const Elem * elem = getElemContainingPoint(p, true);
 
       if (elem)
       {
@@ -125,7 +143,7 @@ PointValueAtXFEMInterfaceAlphaBeta::execute()
             ((dynamic_cast<MooseVariable *>(_coupled_moose_vars[0]))->gradSln())[0];
       }
 
-      const Elem * elem2 = getLocalElemContainingPoint(p, false);
+      const Elem * elem2 = getElemContainingPoint(p, false);
       if (elem2)
       {
         point_vec[0] = p;
@@ -152,7 +170,7 @@ PointValueAtXFEMInterfaceAlphaBeta::finalize()
 }
 
 const Elem *
-PointValueAtXFEMInterfaceAlphaBeta::getLocalElemContainingPoint(const Point & p, bool positive_level_set)
+PointValueAtXFEMInterfaceAlphaBeta::getElemContainingPoint(const Point & p, bool positive_level_set)
 {
   const Elem * elem1 = (*_pl)(p);
 
